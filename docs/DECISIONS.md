@@ -58,3 +58,17 @@ Formato: contexto → opciones → decisión → consecuencias.
 - Se mantiene `chunk_by_place` como estrategia principal: el splitter genérico no conoce la estructura zona → lugar y mezcla lugares en un mismo chunk (p. ej. el chunk 3 acaba con el título de «Parque rural de Anaga»).
 - Con 500/100 produce 40 chunks (205–499 caracteres) y con 1000/200 produce 19 (863–997). La página se deduce con `add_start_index`; zona y lugar quedan vacíos, por lo que la cita solo puede dar la página.
 - A comparar en EXPERIMENTS.md: por lugar (24) vs recursivo 500/100 vs recursivo 1000/200 vs contexto completo.
+
+## D-012 · Recuperación: Chroma coseno y prefijos de tarea (2026-10-15)
+- `retrieval.py`: `get_embeddings()` (Ollama; con prefijos de tarea `task: search result | query:` / `title: none | text:` si se pide) y `build_index()` sobre `langchain_chroma.Chroma` con distancia coseno. Sin interfaz propia; se usa la API de LangChain (`similarity_search`, `similarity_search_with_score`).
+- E-003: los prefijos mejoran hit@1 en +0,17 con chunks por lugar; quedan activos por defecto.
+- Cuidado: `OllamaEmbeddings.embed_query` llama internamente a `embed_documents`; la subclase con prefijos debe saltarse su propio override o la consulta recibe ambos prefijos (hit@1 baja de 0,78 a 0,67). Hay un test que lo vigila.
+- Evaluación independiente del chunking: `eval/retrieval_questions.json` (18 preguntas con fragmentos esperados) y `evaluation.py` (hit@1, hit@3, MRR, latencia). Un acierto es que algún chunk del top-k contenga el texto esperado.
+- Limitación: 18 preguntas escritas por el propio autor del código, todas con respuesta en el corpus; no mide el rechazo de preguntas fuera de tema (se evaluará aparte).
+- Pendiente: dividir lugares largos (E-004), FAISS opcional, reranker y contexto completo como comparación.
+
+## D-013 · Simplificación: módulos planos y tipos de LangChain (2026-10-15)
+- Se eliminan las abstracciones prematuras: `Chunk`, `SearchResult`, el Protocol `VectorStore` y el wrapper `ChromaStore`. Los chunkers devuelven `langchain_core.documents.Document` y el índice es un `Chroma` de LangChain.
+- `ingest/`, `retrieval/` y `evaluation/` pasan de paquetes a un módulo cada uno (`ingest.py`, `retrieval.py`, `evaluation.py`). Se mantiene `chunk_by_place` (aporta valor medido, E-002) y el conjunto de preguntas.
+- Si más adelante se añade FAISS, bastará cambiar la construcción del índice (misma API de LangChain); no hace falta abstracción por adelantado.
+- Criterio general: no crear capas, clases ni paquetes hasta que haya un segundo uso real. Esto también aplica al resto del plan (`ChatService`, `graph/`).
