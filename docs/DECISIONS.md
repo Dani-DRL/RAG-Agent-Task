@@ -32,3 +32,29 @@ Formato: contexto → opciones → decisión → consecuencias.
 - El notebook importa el paquete directamente; Gradio cubre el bonus web y el streaming en el mismo proceso.
 - Modularidad por capas: dependencias hacia dentro (`graph/` usa `retrieval/`, `memory`, `tools/`, nunca al revés); interfaces en los puntos de cambio (VectorStore, factoría de proveedor LLM).
 - `ChatService.chat(message, thread_id)` (y variante streaming) es el único punto de entrada para notebook, Gradio y un posible FastAPI futuro.
+
+## D-007 · Sin API key de momento: Ollama hasta el final del desarrollo (2026-10-15)
+- El autor aún no tiene clave de OpenAI/Gemini. Todo el desarrollo y las pruebas usan Ollama.
+- El enunciado pide un LLM comercial: la factoría de proveedor (`llm.py`) debe mantenerse intercambiable por configuración y la conexión API se verifica en cuanto haya clave. Riesgo asumido: no haber probado aún los límites reales de una API.
+
+## D-008 · `get_weather(fecha)`: validación de fecha y fallback (2026-10-15)
+- Open-Meteo `forecast` cubre ~16 días hacia delante; el histórico requiere la API `archive`.
+- Decisión: validar la fecha primero (formato, pasado, fuera de rango) y devolver errores claros y tipados; fallback a datos simulados deterministas cuando falle la red. Cada intento se registra en log.
+
+## D-009 · Chunking por lugar: implementación (2026-10-15)
+- `ingest/loader.py` extrae líneas con página y fusiona viñetas sueltas; `ingest/chunker.py` genera 24 chunks de 105–2260 caracteres (12 lugares + sección de comida dividida por restaurante cuando supera 1800 caracteres).
+- Se eliminan marcadores de enlace (`[vídeo]`, `[ubicación]`…) porque son ruido para el embedding; cada chunk lleva cabecera `[Zona · Lugar]` y metadatos `zone`, `place`, `page_start`, `page_end` para la cita.
+- Se descarta el primer contexto del autor ("sobre todo os podré decir de zona norte") del nombre del lugar y se normaliza a "Sitios para comer".
+- Línea base para el experimento de comparación: ver D-011.
+- Limitación: los lugares con subapartados (Costa Adeje, Isla Baja) superan los 2000 caracteres y mezclan varios sitios en un chunk; se evaluará si dividirlos mejora la recuperación.
+
+## D-010 · Extracción del PDF: pypdf en lugar de PyMuPDF (2026-10-15)
+- Medido sobre `TENERIFE.pdf`: PyMuPDF 16 224 caracteres en 0,06 s; pypdf 16 204 caracteres en 0,23 s. Texto prácticamente idéntico.
+- Decisión: pypdf (dependencia pura Python, la misma que se vio en clase). Con él se obtienen exactamente los mismos 24 chunks por lugar, y los tests pasan sin cambios.
+- Sustituye a la mención de PyMuPDF en la fase de scaffolding. La extracción queda aislada en `load_pdf_lines`, por lo que cambiar de librería no afecta al chunker.
+
+## D-011 · Línea base de chunking: RecursiveCharacterTextSplitter de LangChain (2026-10-15)
+- Sustituye a la ventana fija escrita a mano: es el splitter visto en clase y el más reconocible para el informe (`chunk_recursive`, dependencia `langchain-text-splitters`).
+- Se mantiene `chunk_by_place` como estrategia principal: el splitter genérico no conoce la estructura zona → lugar y mezcla lugares en un mismo chunk (p. ej. el chunk 3 acaba con el título de «Parque rural de Anaga»).
+- Con 500/100 produce 40 chunks (205–499 caracteres) y con 1000/200 produce 19 (863–997). La página se deduce con `add_start_index`; zona y lugar quedan vacíos, por lo que la cita solo puede dar la página.
+- A comparar en EXPERIMENTS.md: por lugar (24) vs recursivo 500/100 vs recursivo 1000/200 vs contexto completo.
