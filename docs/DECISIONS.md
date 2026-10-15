@@ -22,3 +22,13 @@ Formato: contexto → opciones → decisión → consecuencias.
 - Estructura: zonas (`ZONA NORTE`, ...) → viñetas por lugar (`• Santa Cruz de Tenerife:`) con sub-listas y enlaces "[ubicación]/[vídeo]".
 - Implicación: RAG se justifica por el enunciado, no por necesidad. En el informe, comparar RAG vs. contexto completo como experimento y discutirlo como limitación.
 - Plan de chunking: por lugar (viñeta de primer nivel) conservando metadatos zona + página; comparar con chunking de tamaño fijo en EXPERIMENTS.md.
+
+## D-005 · Vector store: Chroma principal, FAISS como comparación (2026-10-15)
+- Opciones: Chroma, FAISS, LanceDB, Qdrant local, pgvector, sqlite-vec, in-memory, servicios gestionados.
+- Decisión: ChromaDB (persistencia en disco, filtrado por metadatos para citar zona/página). Detrás de una interfaz `VectorStore`, añadir FAISS (nombrado en el enunciado) y comparar tiempo de indexación, latencia y calidad de recuperación.
+- Con ~150 chunks la diferencia de rendimiento será despreciable; la calidad depende más del chunking, embeddings y reranking. Hybrid BM25+vectores queda como experimento opcional.
+
+## D-006 · Sin FastAPI por ahora; fachada `ChatService` + Gradio (2026-10-15)
+- El notebook importa el paquete directamente; Gradio cubre el bonus web y el streaming en el mismo proceso.
+- Modularidad por capas: dependencias hacia dentro (`graph/` usa `retrieval/`, `memory`, `tools/`, nunca al revés); interfaces en los puntos de cambio (VectorStore, factoría de proveedor LLM).
+- `ChatService.chat(message, thread_id)` (y variante streaming) es el único punto de entrada para notebook, Gradio y un posible FastAPI futuro.
